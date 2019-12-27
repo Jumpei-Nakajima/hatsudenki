@@ -1,0 +1,4 @@
+TAG_SEPARATOR = '//'
+CURSOR_SEPARATOR = '--'
+KEYS_SEPARATOR = '@@'
+

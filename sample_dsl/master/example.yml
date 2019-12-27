@@ -1,0 +1,15 @@
+name: sample
+excel: sample_master_input_excel
+column:
+  id:
+    type: string
+    name: unique_id
+    hash: true
+  enum_sample:
+    name: referece to example enum
+    type: enum
+    to: example
+  relation_sample:
+    name: referece to master relation example
+    type: master
+    to: relation_example

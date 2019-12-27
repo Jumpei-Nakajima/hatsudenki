@@ -1,0 +1,9 @@
+name: example
+origin: 0
+values:
+  - name: none
+    ref_name: nothing
+  - name: sample_one
+    ref_name: sample_one
+  - name: sample_two
+    ref_name: sample_two

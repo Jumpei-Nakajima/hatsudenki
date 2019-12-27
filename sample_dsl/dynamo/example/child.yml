@@ -1,0 +1,15 @@
+attributes:
+  child_range_value:
+    type: number
+    range: true
+    comment: child table's range key
+  ref_master:
+    type: master_one
+    to: example
+    comment: reference to master table(to 'master_example' table)
+  enum_value:
+    type: enum
+    to: example
+    comment: referece to enum (to 'example' enum)
+
+comment: sample child multi table.

@@ -1,0 +1,10 @@
+attributes:
+  user_id:
+    hash: true
+    type: uuid
+    comment: unique user id (UUID4)
+  kind:
+    range: true
+    type: string
+    comment: This sentence will not be used for processing
+comment: Test table schema root definition

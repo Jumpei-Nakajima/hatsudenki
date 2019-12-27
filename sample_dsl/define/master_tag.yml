@@ -1,0 +1,5 @@
+- name: ALL
+  comment: all output (for development)
+  release_at: nothing
+  define_at: 2020/01/01
+

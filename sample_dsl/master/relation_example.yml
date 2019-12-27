@@ -1,0 +1,11 @@
+name: relation_example
+excel: sample_master_input_excel
+column:
+  id:
+    type: string
+    name: unique_id
+    hash: true
+  number_value:
+    type: number
+    name: number value
+

@@ -1,0 +1,8 @@
+attributes:
+  one_number_value:
+    type: number
+    comment: simple number value
+  one_string_value:
+    type: string
+    comment: simple string value
+comment: child solo table sample.
