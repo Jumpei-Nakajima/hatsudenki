@@ -37,7 +37,7 @@ class EnumValue(object):
 
     @property
     def python_str(self):
-        return f'{self.enum_value_name}: int = {self.id}'
+        return f'{self.enum_value_name} = {self.id}'
 
     @property
     def cs_str(self):

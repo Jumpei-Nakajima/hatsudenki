@@ -66,3 +66,7 @@ The key needed to uniquely identify yourself in the table. The entity is a range
 
 A string that uniquely identifies an item in a table.
 In the case of Solo table, it is a HASH key, and in the case of Multi table, it is a character string combining the HASH key and RANGE key.
+
+### Many Cursor
+
+A string representing the set to which the item belongs in the table. Only present in the Multi table, the value is a HASH key. (Because the Solo table does not belong to the set)
