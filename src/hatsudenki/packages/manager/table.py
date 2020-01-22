@@ -184,3 +184,11 @@ class TableManager(object):
                         await HatsudenkiClient.set_ttl_mode(tbl.get_collection_name(), ttl_key, True)
                     except:
                         pass
+
+    @classmethod
+    def get_table_num(cls):
+        return len(cls._all_tables.keys())
+
+    @classmethod
+    def get_collection_num(cls):
+        return len(cls._all_collections.keys())

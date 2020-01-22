@@ -334,8 +334,14 @@ class TableFileRenderer(FileRenderer):
             'from hatsudenki.packages.table.solo import SoloHatsudenkiTable',
             'from hatsudenki.packages.table.child import ChildMultiHatsudenkiTable',
             'from hatsudenki.packages.table.child_solo import ChildSoloHatsudenkiTable',
-            '',
         ]
         d.add(*l)
         d.blank_line(2)
+
+        d.indent('def table_setup():')
+        d.add('from hatsudenki.packages.manager.table import TableManager')
+        d.add(
+            'print(f"load all tables OK. collections={TableManager.get_collection_num()}  tables={TableManager.get_table_num()}")')
+        d.blank_line(2)
+
         return d
