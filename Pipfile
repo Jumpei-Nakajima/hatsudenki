@@ -12,7 +12,6 @@ pyyaml = "*"
 openpyxl = "*"
 msgpack = "*"
 lz4 = "*"
-hatsudenki = {path = "./../hatsudenki"}
 
 [requires]
 python_version = "3.7"
