@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -5,10 +6,10 @@ from asyncio import sleep
 from copy import deepcopy
 from datetime import date, datetime
 from logging import getLogger
+from random import choice
 from typing import List, AsyncGenerator, IO
 
-import aioboto3
-from aioboto3 import setup_default_session
+from aioboto3 import Session
 from botocore.config import Config
 
 from hatsudenki.packages.counter import QueryCounter
@@ -17,8 +18,6 @@ from hatsudenki.packages.expression.condition import ConditionExpression, KeyCon
     FilterConditionExpression
 from hatsudenki.packages.expression.update import UpdateExpression
 
-_TRACE_TAG = 'hatsudenki.command'
-_TRACE_SERVICE = 'hatsudenki'
 _logger = getLogger(__name__)
 
 
@@ -28,7 +27,7 @@ class HatsudenkiClient(object):
     """
 
     #: クライアントインスタンス
-    _client = None
+    _clients = []
     _prefix: str = None
     _is_out_slow_log = False
     _slow_log_duration = 0.1
@@ -40,8 +39,20 @@ class HatsudenkiClient(object):
             QueryCounter.dump_counter()
 
     @classmethod
+    def setup_by_session(cls, session, prefix: str, endpoint: str = None, connection_num: int = 10):
+        con = Config(
+            parameter_validation=False,
+            max_pool_connections=1,
+        )
+
+        print(f'connect dynamodb. endpoint={endpoint} prefix={prefix}, connection_num={connection_num}')
+        for _ in range(connection_num):
+            cls._clients.append(session.client('dynamodb', endpoint_url=endpoint, config=con, use_ssl=False))
+        cls._prefix = prefix
+
+    @classmethod
     def setup(cls, loop, endpoint: str, prefix: str = '', region_name: str = None, aws_access_key_id: str = None,
-              aws_secret_access_key: str = None):
+              aws_secret_access_key: str = None, pool_num: int = 10):
         """
         | 初期設定を行う。
         | すべての処理より先に一度だけ呼び出すこと
@@ -73,18 +84,11 @@ class HatsudenkiClient(object):
         if secret:
             d['aws_secret_access_key'] = secret
 
-        setup_default_session(
+        ses = Session(
             **d
         )
 
-        con = Config(
-            parameter_validation=False,
-            max_pool_connections=50,
-        )
-
-        print(f'[DynamoDB] endpoint={endpoint} prefix={prefix} region={region}')
-        cls._client = aioboto3.client('dynamodb', endpoint_url=endpoint, config=con, use_ssl=False)
-        cls._prefix = prefix
+        cls.setup_by_session(session=ses, prefix=prefix, endpoint=endpoint, connection_num=pool_num)
 
     @classmethod
     def set_slow_log(cls, flg: bool, duration: float):
@@ -109,6 +113,10 @@ class HatsudenkiClient(object):
                 _logger.warning(f'[SLOW] {label} sec={p}', key)
         else:
             return
+
+    @classmethod
+    def _get_client(cls):
+        return choice(cls._clients)
 
     @classmethod
     def resolve_table_name(cls, table_name: str, skip: bool = False):
@@ -158,7 +166,7 @@ class HatsudenkiClient(object):
                     del g['ProvisionedThroughput']
             p['GlobalSecondaryIndexes'] = gsi
 
-        res = await cls._client.create_table(**p)
+        res = await cls._get_client().create_table(**p)
 
         return res
 
@@ -253,7 +261,7 @@ class HatsudenkiClient(object):
                     }
                 ],
             }
-            await cls._client.update_table(**p)
+            await cls._get_client().update_table(**p)
 
             # 完了を待つ
             for _ in range(60):
@@ -289,7 +297,7 @@ class HatsudenkiClient(object):
                 ],
             }
 
-            await cls._client.update_table(**p)
+            await cls._get_client().update_table(**p)
 
             # 完了を待つ
             for _ in range(60):
@@ -308,7 +316,7 @@ class HatsudenkiClient(object):
         p = {
             'TableName': cls.resolve_table_name(table_name)
         }
-        res = await cls._client.delete_table(**p)
+        res = await cls._get_client().delete_table(**p)
         cls._cheese(_start, f'drop_table {table_name}', p)
         return res
 
@@ -325,7 +333,7 @@ class HatsudenkiClient(object):
         p = {
             'TableName': cls.resolve_table_name(table_name)
         }
-        res = await cls._client.describe_table(**p)
+        res = await cls._get_client().describe_table(**p)
         cls._cheese(_start, f'describe_table {table_name}', p)
         return res['Table']
 
@@ -346,7 +354,7 @@ class HatsudenkiClient(object):
             **({'ExclusiveStartTableName': st} if len(st) is not 0 else {})
         }
 
-        res = await cls._client.list_tables(**p)
+        res = await cls._get_client().list_tables(**p)
         cls._cheese(_start, f'list_tables {start_table_name}', p)
         return [i.replace(st, '') for i in res.get('TableNames')]
 
@@ -369,7 +377,7 @@ class HatsudenkiClient(object):
         if prj is not None:
             p['ProjectionExpression'] = ','.join(prj)
 
-        res = await cls._client.get_item(**p)
+        res = await cls._get_client().get_item(**p)
 
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
@@ -412,7 +420,7 @@ class HatsudenkiClient(object):
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
 
-        res = await cls._client.put_item(**p)
+        res = await cls._get_client().put_item(**p)
 
         cls._cheese(_start, f'put_item {table_name}', p)
         if cls._use_profiler:
@@ -437,7 +445,7 @@ class HatsudenkiClient(object):
             **(condition.to_parameter() if condition is not None else {})
         }
 
-        res = await cls._client.delete_item(**p)
+        res = await cls._get_client().delete_item(**p)
 
         cls._cheese(_start, f'delete_item {table_name}', p)
         return res
@@ -464,7 +472,7 @@ class HatsudenkiClient(object):
 
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
-        res = await cls._client.update_item(**p)
+        res = await cls._get_client().update_item(**p)
 
         cls._cheese(_start, f'update_item {table_name}', p)
         if cls._use_profiler:
@@ -507,7 +515,7 @@ class HatsudenkiClient(object):
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
 
-        res = await cls._client.query(**p)
+        res = await cls._get_client().query(**p)
 
         cls._cheese(_start, f'query {table_name}', p)
 
@@ -541,7 +549,7 @@ class HatsudenkiClient(object):
         if prj is not None:
             p['ProjectionExpression'] = ','.join(prj)
 
-        res = await cls._client.scan(**p)
+        res = await cls._get_client().scan(**p)
         ret = res['Items']
         cls._cheese(_start, f'scan {table_name}', p)
         if len(ret) >= limit:
@@ -550,7 +558,7 @@ class HatsudenkiClient(object):
         while 'LastEvaluatedKey' in res:
             _start = cls._take()
             p['ExclusiveStartKey'] = res['LastEvaluatedKey']
-            res = await cls._client.scan(**p)
+            res = await cls._get_client().scan(**p)
             ret.extend(res['Items'])
             cls._cheese(_start, f'scan {table_name}', p)
             if len(ret) >= limit:
@@ -570,7 +578,7 @@ class HatsudenkiClient(object):
         if prj is not None:
             p['ProjectionExpression'] = ','.join(prj)
 
-        res = await cls._client.scan(**p)
+        res = await cls._get_client().scan(**p)
         ret = res['Items']
         yield ret
 
@@ -579,7 +587,7 @@ class HatsudenkiClient(object):
 
         while 'LastEvaluatedKey' in res:
             p['ExclusiveStartKey'] = res['LastEvaluatedKey']
-            res = await cls._client.scan(**p)
+            res = await cls._get_client().scan(**p)
             yield res['Items']
 
     @classmethod
@@ -592,7 +600,7 @@ class HatsudenkiClient(object):
                 'AttributeName': attr_name
             }
         }
-        res = await cls._client.update_time_to_live(**p)
+        res = await cls._get_client().update_time_to_live(**p)
 
         cls._cheese(_start, f'set_ttl_mode {table_name}', p)
         return res
@@ -604,12 +612,12 @@ class HatsudenkiClient(object):
         p = {
             'RequestItems': request_items
         }
-        res = await cls._client.batch_get_item(**p)
+        res = await cls._get_client().batch_get_item(**p)
         cls._cheese(_start, 'batch_get_item', p)
 
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
-        res = await cls._client.batch_get_item(**p)
+        res = await cls._get_client().batch_get_item(**p)
         cls._cheese(_start, 'batch_get_item', p)
 
         if cls._use_profiler:
@@ -626,12 +634,12 @@ class HatsudenkiClient(object):
         p = {
             'RequestItems': request_items
         }
-        res = await cls._client.batch_write_item(**p)
+        res = await cls._get_client().batch_write_item(**p)
         cls._cheese(_start, 'batch_write_item', p)
 
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
-        res = await cls._client.batch_write_item(**p)
+        res = await cls._get_client().batch_write_item(**p)
         cls._cheese(_start, 'batch_write_item', p)
         if cls._use_profiler:
             QueryCounter.count('batch_write')
@@ -647,11 +655,11 @@ class HatsudenkiClient(object):
             'TransactItems': items
         }
 
-        res = await cls._client.transact_write_items(**p)
+        res = await cls._get_client().transact_write_items(**p)
         cls._cheese(_start, 'transact_write', p)
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
-        res = await cls._client.transact_write_items(**p)
+        res = await cls._get_client().transact_write_items(**p)
         cls._cheese(_start, 'transact_write', p)
 
         if cls._use_profiler:
@@ -669,13 +677,13 @@ class HatsudenkiClient(object):
             'TransactItems': items
         }
 
-        res = await cls._client.transact_get_items(**p)
+        res = await cls._get_client().transact_get_items(**p)
         cls._cheese(_start, 'transact_get', p)
 
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
 
-        res = await cls._client.transact_get_items(**p)
+        res = await cls._get_client().transact_get_items(**p)
         cls._cheese(_start, 'transact_get', p)
         if cls._use_profiler:
             QueryCounter.count('transact_get')
@@ -690,8 +698,8 @@ class HatsudenkiClient(object):
 
     @classmethod
     async def die(cls):
-
-        await cls._client.close()
+        t = [c.close() for c in cls._clients]
+        await asyncio.gather(*t)
 
     @classmethod
     async def export_json(cls, table_name: str, out_stream: IO, tick=100, raw_table_name=False):
@@ -756,7 +764,7 @@ class HatsudenkiClient(object):
 
             # 作り直す
             await cls.drop_table(table_name)
-            await cls._client.create_table(**p)
+            await cls._get_client().create_table(**p)
 
         idx = 0
         items = []
