@@ -292,7 +292,7 @@ class SoloHatsudenkiTable(object):
             # self.force_set_key(pk.name, TableManager.resolve_date_now())
             setattr(self, pk.name, DateManager.get_now())
 
-    async def put(self, overwrite=False, skip_hook=False, with_retry=True, error_level=ERROR):
+    async def put(self, overwrite=False, skip_hook=False):
         """
         新規作成
         overwriteがFalse且つアイテムが存在する場合は例外が発生する
@@ -309,30 +309,12 @@ class SoloHatsudenkiTable(object):
         self.force_set_key('_v', self._v + 1)
         ser = self.serialize()
         c = self.not_exist_condition() if not overwrite else None
-        last_error = None
 
-        if with_retry:
-            for i in range(5):
-                try:
-                    res = await HatsudenkiClient.put_item(
-                        self.get_collection_name(),
-                        ser,
-                        c
-                    )
-                    break
-                except Exception as e:
-                    last_error = e
-                    _logger.warning(f'update failed. retry {i + 1}... {e}')
-            else:
-                _logger.log(error_level,
-                            f'[DANGER] update all failed! {last_error} {self.to_dict()}')
-                raise Exception('hatsudenki update failed.')
-        else:
-            res = await HatsudenkiClient.put_item(
-                self.get_collection_name(),
-                ser,
-                c
-            )
+        res = await HatsudenkiClient.put_item(
+            self.get_collection_name(),
+            ser,
+            c
+        )
 
         self.flush()
         return res
@@ -360,8 +342,7 @@ class SoloHatsudenkiTable(object):
 
             # upd.set(update_key, fc.serialize(self[update_key]), raw=True)
 
-    async def update(self, upsert=False, increment=True, skip_hook=False, with_retry=True,
-                     error_level=ERROR):
+    async def update(self, upsert=False, increment=True, skip_hook=False):
         """
         更新
         upsertが偽且つアイテムが存在しない場合は例外が発生する
@@ -404,18 +385,7 @@ class SoloHatsudenkiTable(object):
 
         keys = self.serialized_key
 
-        if with_retry:
-            for i in range(5):
-                try:
-                    res = await HatsudenkiClient.update_item(self.get_collection_name(), keys, upd, cond)
-                    break
-                except Exception as e:
-                    _logger.warning(f'update failed. retry {i + 1}... {e}')
-            else:
-                _logger.log(error_level, f'[DANGER] update all failed! {self.to_dict()}')
-                raise Exception('hatsudenki update failed.')
-        else:
-            res = await HatsudenkiClient.update_item(self.get_collection_name(), keys, upd, cond)
+        res = await HatsudenkiClient.update_item(self.get_collection_name(), keys, upd, cond)
 
         self.flush()
 

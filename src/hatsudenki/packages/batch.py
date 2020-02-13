@@ -29,6 +29,7 @@ class BatchWriteTask:
     item: dict = None
     kind: BatchWriteKind = None
 
+    @property
     def query(self):
         return {
             self.kind.value: {'Item': self.item}
@@ -36,6 +37,7 @@ class BatchWriteTask:
             self.kind.value: {'Key': self.item}
         }
 
+    @property
     def real_table_name(self):
         return HatsudenkiClient.resolve_table_name(self.table_name)
 
@@ -127,9 +129,7 @@ class QueryBatchWriteItem(object):
         return (HatsudenkiClient.batch_write_item(query(h)) for h in chunk_heads)
 
     async def exec(self, limit=25):
-        # TODO: unprocessへの対応がまだ
         g = [q for q in self.exec_query(limit)]
-
         await asyncio.gather(*g)
 
     @property
