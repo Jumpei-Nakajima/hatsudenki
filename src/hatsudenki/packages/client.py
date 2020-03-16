@@ -487,7 +487,7 @@ class HatsudenkiClient(object):
 
     @classmethod
     async def query(cls, table_name: str, key_cond: KeyConditionExpression, filter_cond: BaseExpression = None,
-                    use_index_name: str = None, limit=0, prj: List[str] = None, raw_table_name=False):
+                    use_index_name: str = None, limit=0, prj: List[str] = None, raw_table_name=False, max_retry=100):
         """
         条件式を複数指定する検索。複数件のアイテムを返却する
 
@@ -500,35 +500,46 @@ class HatsudenkiClient(object):
         :param raw_table_name: テーブル名にプリフィックスを付与しない
         :return: AWSレスポンス
         """
+        ret = []
+        last_key = None
 
-        _start = cls._take()
+        for query_num in range(max_retry):
+            _start = cls._take()
 
-        p = {
-            'TableName': cls.resolve_table_name(table_name, raw_table_name),
-            **({'IndexName': use_index_name} if use_index_name is not None else {}),
-            **({'Limit': limit} if limit > 0 is not None else {}),
-            **(BaseExpression.merge(key_cond, filter_cond))
-        }
-        if prj is not None:
-            p['ProjectionExpression'] = ','.join(prj)
+            p = {
+                'TableName': cls.resolve_table_name(table_name, raw_table_name),
+                **({'IndexName': use_index_name} if use_index_name is not None else {}),
+                **({'Limit': limit} if limit > 0 is not None else {}),
+                **(BaseExpression.merge(key_cond, filter_cond))
+            }
+            if prj is not None:
+                p['ProjectionExpression'] = ','.join(prj)
 
-        if cls._use_profiler:
-            p['ReturnConsumedCapacity'] = 'INDEXES'
+            if cls._use_profiler:
+                p['ReturnConsumedCapacity'] = 'INDEXES'
 
-        res = await cls._get_client().query(**p)
+            res = await cls._get_client().query(**p)
 
-        cls._cheese(_start, f'query {table_name}', p)
+            cls._cheese(_start, f'query {table_name}', p)
 
-        if cls._use_profiler:
-            if p['ExpressionAttributeValues'].get(':key_value__1', None):
-                QueryCounter.count('query',
-                                   f"{table_name} - {p.get('IndexName')} - {p['ExpressionAttributeValues'][':key_value__1']}")
+            if cls._use_profiler:
+                if p['ExpressionAttributeValues'].get(':key_value__1', None):
+                    QueryCounter.count('query',
+                                       f"{table_name} - {p.get('IndexName')} - {p['ExpressionAttributeValues'][':key_value__1']}")
+                else:
+                    QueryCounter.count('query', f"{table_name}")
+                consumed_cu = res.get('ConsumedCapacity', False)
+                if consumed_cu:
+                    QueryCounter.count_read_ccu(consumed_cu)
+            ret.extend(res['Items'])
+            last_key = res.get('LastEvaluatedKey')
+            if last_key is None:
+                break
             else:
-                QueryCounter.count('query', f"{table_name}")
-            consumed_cu = res.get('ConsumedCapacity', False)
-            if consumed_cu:
-                QueryCounter.count_read_ccu(consumed_cu)
-        return res['Items']
+                _logger.warning(f'over 1MB response. query next {query_num}')
+                await asyncio.sleep(0.1)
+
+        return ret
 
     @classmethod
     async def scan(cls, table_name: str, filter_cond: FilterConditionExpression = None, limit=20,
@@ -606,47 +617,70 @@ class HatsudenkiClient(object):
         return res
 
     @classmethod
-    async def batch_get_item(cls, request_items: dict):
+    async def batch_get_item(cls, request_items: dict, max_retry=100):
+        ret = {}
+        req_items = request_items
 
-        _start = cls._take()
-        p = {
-            'RequestItems': request_items
-        }
-        res = await cls._get_client().batch_get_item(**p)
-        cls._cheese(_start, 'batch_get_item', p)
+        for cnt in range(max_retry):
+            _start = cls._take()
+            p = {
+                'RequestItems': req_items
+            }
+            if cls._use_profiler:
+                p['ReturnConsumedCapacity'] = 'INDEXES'
 
-        if cls._use_profiler:
-            p['ReturnConsumedCapacity'] = 'INDEXES'
-        res = await cls._get_client().batch_get_item(**p)
-        cls._cheese(_start, 'batch_get_item', p)
+            res = await cls._get_client().batch_get_item(**p)
+            cls._cheese(_start, 'batch_get_item', p)
 
-        if cls._use_profiler:
-            QueryCounter.count('batch_get')
-            consumed_cu_list = res.get('ConsumedCapacity', False)
-            for consumed_cu in consumed_cu_list:
-                QueryCounter.count_read_ccu(consumed_cu)
+            if cls._use_profiler:
+                QueryCounter.count('batch_get')
+                consumed_cu_list = res.get('ConsumedCapacity', False)
+                for consumed_cu in consumed_cu_list:
+                    QueryCounter.count_read_ccu(consumed_cu)
 
-        return res['Responses']
+            # 値の回収
+            for k, i in res['Responses'].items():
+                if k in res:
+                    ret[k].extend(i)
+                else:
+                    ret[k] = i
+
+            # unprocessが存在した場合はもう一回
+            req_item = res['UnprocessedKeys']
+            if not req_item:
+                break
+            else:
+                _logger.warning(f'exists UnprocessedKeys. retrying...{cnt}')
+        return ret
 
     @classmethod
-    async def batch_write_item(cls, request_items: dict):
-        _start = cls._take()
-        p = {
-            'RequestItems': request_items
-        }
-        res = await cls._get_client().batch_write_item(**p)
-        cls._cheese(_start, 'batch_write_item', p)
+    async def batch_write_item(cls, request_items: dict, max_retry=100):
+        req_items = request_items
+        for cnt in range(max_retry):
+            _start = cls._take()
+            p = {
+                'RequestItems': req_items
+            }
 
-        if cls._use_profiler:
-            p['ReturnConsumedCapacity'] = 'INDEXES'
-        res = await cls._get_client().batch_write_item(**p)
-        cls._cheese(_start, 'batch_write_item', p)
-        if cls._use_profiler:
-            QueryCounter.count('batch_write')
-            consumed_cu_list = res.get('ConsumedCapacity', False)
-            for consumed_cu in consumed_cu_list:
-                QueryCounter.count_write_ccu(consumed_cu)
-        return res['UnprocessedItems']
+            if cls._use_profiler:
+                p['ReturnConsumedCapacity'] = 'INDEXES'
+
+            res = await cls._get_client().batch_write_item(**p)
+            cls._cheese(_start, 'batch_write_item', p)
+
+            if cls._use_profiler:
+                QueryCounter.count('batch_write')
+                consumed_cu_list = res.get('ConsumedCapacity', False)
+                for consumed_cu in consumed_cu_list:
+                    QueryCounter.count_write_ccu(consumed_cu)
+
+            # unprocessが存在した場合はもう一回
+            req_items = res['UnprocessedItems']
+            if not req_items:
+                break
+            else:
+                _logger.warning(f'UnprocessedItems foud. next={cnt}')
+                await asyncio.sleep(0.1)
 
     @classmethod
     async def transaction_write(cls, items: list):
@@ -655,8 +689,6 @@ class HatsudenkiClient(object):
             'TransactItems': items
         }
 
-        res = await cls._get_client().transact_write_items(**p)
-        cls._cheese(_start, 'transact_write', p)
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
         res = await cls._get_client().transact_write_items(**p)
@@ -676,9 +708,6 @@ class HatsudenkiClient(object):
         p = {
             'TransactItems': items
         }
-
-        res = await cls._get_client().transact_get_items(**p)
-        cls._cheese(_start, 'transact_get', p)
 
         if cls._use_profiler:
             p['ReturnConsumedCapacity'] = 'INDEXES'
