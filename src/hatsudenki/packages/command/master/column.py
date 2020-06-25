@@ -85,6 +85,9 @@ class MasterColumn(object):
     def excel_raw_header_name(self):
         return self.data.get('name', self.column_name)
 
+    def get_link_label(self):
+        return None
+
     @property
     def table(self):
         return self.master_loader.get_by_table_name(self.table_name)
@@ -178,17 +181,6 @@ class MasterColumn(object):
 
         return i
 
-    @staticmethod
-    def serial_resolver_default():
-        i = IndentString()
-
-        i.add('@property')
-        i.indent('def log_id(self):')
-        i.add('return self.one_cursor')
-
-        return i
-
-
 @master_column('number', 'MasterColumnInt', 'uint', 'INTEGER')
 class ColumnNumber(MasterColumn):
     def generate_value(self, value: any):
@@ -238,16 +230,14 @@ class ColumnRelation(MasterColumn):
     def is_relation(self):
         return True
 
-    @property
-    def excel_header_name(self):
-        n = self.data.get('name', self.column_name)
+    def get_link_label(self):
         to = self.to
         self_table = self.table
         target_table = self.master_loader.get_by_table_name(to)
         if self_table.excel_name == target_table.excel_name:
-            return f'=HYPERLINK("#{target_table.excel_sheet_name}!A1", "{n}")'
+            return f'#{target_table.excel_sheet_name}!A1'
         else:
-            return f'=HYPERLINK("{target_table.excel_name}.xlsx#{target_table.excel_sheet_name}!A1", "{n}")'
+            return f'{target_table.excel_name}.xlsx#{target_table.excel_sheet_name}!A1'
 
     @property
     def to(self):
@@ -308,12 +298,10 @@ class ColumnEnum(MasterColumn):
     def is_relation(self):
         return True
 
-    @property
-    def excel_header_name(self):
-        n = self.data.get('name', self.column_name)
+    def get_link_label(self):
         to = self.data['to']
         target_table = self.enum_loader.get_by_name(to)
-        return f'=HYPERLINK("pg_excel/定義タイプ.xlsx#{target_table.excel_sheet_name}!A1", "{n}")'
+        return f'pg_excel/定義タイプ.xlsx#{target_table.excel_sheet_name}!A1'
 
     @property
     def to(self):

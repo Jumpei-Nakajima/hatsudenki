@@ -152,11 +152,11 @@ class TableRenderUnit(RenderUnit[HatsudenkiData]):
                 lsi_class_str.add(f'{opt["name"]} = LSI({s})')
 
         # LSIが一つもない場合はpass
-        if lsi_class_str.line_num is 1:
+        if lsi_class_str.line_num == 1:
             lsi_class_str.add('pass')
 
         # GSIが一つもない場合はpass
-        if gsi_class_str.line_num is 1:
+        if gsi_class_str.line_num == 1:
             gsi_class_str.add('pass')
         body = IndentString()
 
@@ -189,7 +189,7 @@ class TableRenderUnit(RenderUnit[HatsudenkiData]):
             attr_num += 1
 
         # 属性が一つもない場合はpass
-        if attr_num is 0:
+        if attr_num == 0:
             body.add('pass')
         return body
 

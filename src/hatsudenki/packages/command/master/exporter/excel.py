@@ -19,13 +19,10 @@ class MasterExcelData(ExcelData):
 
     def __init__(self, file_path: Path):
         super().__init__(file_path)
-        self.load()
+        self.load_data_only()
 
     def iter_table_sheet(self):
         return (sheet for sheet in self.book.worksheets)
-
-    def iter_formula_table_sheet(self):
-        return (sheet for sheet in self.formula_book.worksheets)
 
 
 class MasterExcelSheet(object):
@@ -33,15 +30,13 @@ class MasterExcelSheet(object):
     企画入力マスターシート
     """
 
-    def __init__(self, book: 'MasterExcel', sheet: Worksheet, formula_sheet: Worksheet, table: MasterTable, loader):
+    def __init__(self, book: 'MasterExcel', sheet: Worksheet, table: MasterTable, loader):
         from hatsudenki.packages.command.master.exporter.loader import MasterExcelLoader
         self.sheet = sheet
-        self.formula_sheet = formula_sheet
         self.table = table
         self.loader: MasterExcelLoader = loader
         ToolOutput.out(f'[MasterExcel]Sheet準備 {self.sheet.title} = {table.table_name}')
         self.book = book
-
         self.resolved_headers = self._resolve_headers()
         self.datas: Dict[str, Dict[str, Tuple[MasterColumn, any]]] = self._resolve()
 
@@ -62,12 +57,26 @@ class MasterExcelSheet(object):
         return f'{self.book.data.name} {self.sheet.title} "{self.table.full_path}:0"'
 
     def _resolve_headers(self):
-        h = next(self.formula_sheet.rows)
+        # TAG分足して1
+        col_num = len(self.table.columns.values()) + 1
+        # 一行目取得
+        h = next(self.sheet.rows)
         ret = {}
+        i = 0
+        st = 0
         for cell in h:
-            c = next((c for c in self.table.columns.values() if cell.value == c.excel_header_name), None)
-            ret[cell.value] = c
-
+            v = cell.value
+            c = next((c for c in self.table.columns.values() if
+                      v == c.excel_raw_header_name or v == 'TAG'), None)
+            if c is None:
+                col_name = '空カラム_' + str(i)
+            else:
+                col_name = cell.value
+                st += 1
+            i += 1
+            ret[col_name] = c
+            if st >= col_num:
+                break
         return ret
 
     def _check_relation(self, table: MasterTable, val, header: str = None):
@@ -76,7 +85,8 @@ class MasterExcelSheet(object):
         d = s.find_row(val)
         if d is None:
             target_info = f'{table.label} "{table.rel_path}:0"'
-            raise Exception(f'参照解決に失敗 {self.except_label} {header} {val}\n{target_info}')
+            p = f'{table.excel_name}.xlsx:{table.excel_sheet_name} から {val} が見つかりません'
+            raise Exception(f'参照解決に失敗 {self.except_label} 【Line】{line}行目 【{header}】{val}\n{p}')
 
         return val
 
@@ -94,15 +104,18 @@ class MasterExcelSheet(object):
         :return:
         """
         v = column.resolve_value(sel, val, is_raw=False)
-        if isinstance(v, MasterTable):
+        target_type = column.resolve_target(sel, is_raw=False)
+        if isinstance(target_type, MasterTable):
             # masterの場合はリレーション先が存在するかチェックする
             # enumは解決時にチェックされているので不要
-            self._check_relation(v, val, column.excel_raw_header_name)
+            self._check_relation(target_type, val, column.excel_raw_header_name, line)
         # strで固定しないとMessagePackに変換できない
         return str(v)
 
-    def _find_header_index(self, key_str: str):
-        return next((idx for idx, key in enumerate(self.resolved_headers.keys()) if key == key_str), None)
+    def _find_header_index(self, key_str: str, raw_key_str: str = None):
+        return next(
+            (idx for idx, key in enumerate(self.resolved_headers.keys()) if
+             key == key_str or (key == raw_key_str and key is not None)), None)
 
     def _check_tag_level(self, tag_level: MasterTag):
 
@@ -158,7 +171,7 @@ class MasterExcelSheet(object):
             tag_level = str(row[tag_idx].value)
             tag_info = self.loader.resolve_tag(tag_level)
 
-            if row[ref_idxes[0]].value is None or not self._check_tag_level(tag_info):
+            if ref_idxes[0] is None or row[ref_idxes[0]].value is None or not self._check_tag_level(tag_info):
                 continue
 
             if tag_info is None:
@@ -275,5 +288,5 @@ class MasterExcel(BaseInfo):
         return self.table_sheets[sheet_name]
 
     def _create_sheet(self, sheet):
-        return MasterExcelSheet(self, sheet, self.data.formula_book[sheet.title],
+        return MasterExcelSheet(self, sheet, None,
                                 self.table[sheet.title], self.loader)

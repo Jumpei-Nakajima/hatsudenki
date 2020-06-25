@@ -40,13 +40,17 @@ class Command(BaseCommand):
         tag_loader.load()
 
         # TAG情報を取得
-        out_tag = tag_loader.get_tag(target_tag)
+        target_tags = target_tag.split('&')
+        out_tags = []
+        for this_tag in target_tags:
+            this_out_tag = tag_loader.get_tag(this_tag)
 
-        if out_tag is None:
-            raise Exception(f'出力タグ {target_tag} は定義されていません！')
+            if this_out_tag is None:
+                raise Exception(f'出力タグ {target_tag} は定義されていません！')
 
-        if out_tag.is_only:
-            ToolOutput.out(f'onlyモードで出力します include={out_tag.include}')
+            if this_out_tag.is_only:
+                ToolOutput.out(f'onlyモードで出力します include={this_out_tag.include}')
+            out_tags.append(this_out_tag)
 
         enum_path = dsl_path / 'enum'
         master_schema_path = dsl_path / 'master'
@@ -69,7 +73,7 @@ class Command(BaseCommand):
         # Excel読み込み
         ToolOutput.print_with_anchor('excel準備')
         excel_loader = MasterExcelLoader(master_excel_path, master_loader, tag_loader)
-        excel_loader.set_out_level(out_tag)
+        excel_loader.set_out_level(out_tags)
         excel_loader.set_debug_flg(enable_debug)
         excel_loader.setup()
         ToolOutput.print_with_pop('OK')
@@ -79,7 +83,7 @@ class Command(BaseCommand):
             recreate_dir(out_raw_yaml_path)
 
         # YAML書き出し
-        self.generate_yaml(excel_loader, out_raw_yaml_path, out_tag)
+        self.generate_yaml(excel_loader, out_raw_yaml_path)
 
     def generate_yaml(self, excel_loader: MasterExcelLoader, out_raw_yaml_path: Path, out_tag: MasterTag):
         for p, excel in excel_loader.iter():

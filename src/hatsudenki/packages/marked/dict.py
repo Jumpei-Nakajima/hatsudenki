@@ -219,6 +219,17 @@ class MarkedObjectDict(Generic[T]):
         self._item[key_str] = value
         self.modify_mark(key_str)
 
+    def __delitem__(self, key):
+        """
+        キーごと値を削除
+
+        :param key: セットするキー名
+        :return: None
+        """
+        key_str = str(key)
+        del self._item[key_str]
+        self.modify_mark(key_str)
+
     # TODO: 仮対応
     def clear(self):
         self._item: Dict[any, T] = {}
@@ -251,7 +262,7 @@ class MarkedObjectDict(Generic[T]):
             return
 
         for update_key in self._mark:
-            now_value = self[update_key]
+            now_value = self._item.get(update_key)
             fc = self._target_class
 
             n = f'{self.name}.{update_key}'

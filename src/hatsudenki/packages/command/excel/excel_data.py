@@ -19,9 +19,6 @@ class CellStyle(object):
     GREEN.fill = PatternFill(fill_type='solid', fgColor='CCFFCC')
 
 
-# HYPERLINK_REGEXP = re.compile('=HYPERLINK\(\"(([#!\.]?[^.]+)+)\", \"(([#!\.]?[^.]+)+)\"\)')
-
-
 class ExcelData(object):
     def __init__(self, file_path: Path):
         self.file_path = file_path
@@ -37,6 +34,10 @@ class ExcelData(object):
             self.book = openpyxl.load_workbook(str(self.file_path), data_only=flg)
         if flg:
             self.formula_book = openpyxl.load_workbook(str(self.file_path), data_only=False)
+
+    def load_data_only(self):
+        if self.book is None:
+            self.book = openpyxl.load_workbook(str(self.file_path), data_only=True, read_only=True)
 
     def create(self):
         # ブック作成
@@ -113,15 +114,11 @@ class ExcelData(object):
                     v1, v2 = c.split(',')
                     c = v2.strip()[1:-2]
 
-                # m = HYPERLINK_REGEXP.match(c)
-                # if m is not None:
-                #     c = m.group(3)
-
                 key_names.append(c)
 
         for cells in iter:
             v = [cell.value for cell in cells]
-            if len(v) is 0 or v[0] is None:
+            if len(v) == 0 or v[0] is None:
                 break
             l = zip(key_names, v)
             yield OrderedDict(l)
@@ -155,7 +152,8 @@ class ExcelData(object):
             column_size[cell.column] = max((column_size.get(cell.column, 0), len(str(cell.value))))
 
             if header_links is not None and len(header_links) > i and len(header_links[i]) > 0:
-                cell.value = f'=HYPERLINK("{header_links[i]}", "{cell.value}")'
+                cell.hyperlink = header_links[i]
+                # cell.value = f'=HYPERLINK("{header_links[i]}", "{cell.value}")'
                 cell.font = Font(name="Meiryo UI", size=10, underline="single",
                                  color=Color(rgb=None, indexed=None, auto=None, theme=10, tint=0.0, type="theme"))
 
@@ -167,7 +165,7 @@ class ExcelData(object):
         self.write_row(sheet_name, row, col, data, style)
 
     def save_file(self):
-        if len(self.book.worksheets) is 0:
+        if len(self.book.worksheets) == 0:
             return
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         self.book.save(str(self.file_path))

@@ -1,4 +1,4 @@
-from logging import getLogger, ERROR
+from logging import getLogger
 from typing import Type, TypeVar, List, Dict, Tuple, Generator, Callable, Optional, AsyncGenerator
 
 from hatsudenki.packages.client import HatsudenkiClient
@@ -342,7 +342,7 @@ class SoloHatsudenkiTable(object):
 
             # upd.set(update_key, fc.serialize(self[update_key]), raw=True)
 
-    async def update(self, upsert=False, increment=True, skip_hook=False):
+    async def update(self, upsert=False, increment=True, skip_hook=False, cond: Optional[ConditionExpression] = None):
         """
         更新
         upsertが偽且つアイテムが存在しない場合は例外が発生する
@@ -363,20 +363,20 @@ class SoloHatsudenkiTable(object):
 
         # 更新されたものだけ候補に入れる
         upd = UpdateExpression()
-
         self.build_update_expression(upd)
 
-        cond = self.exist_condition() if not upsert else None
+        if cond is None:
+            cond = ConditionExpression()
+        else:
+            cond.op_and()
+
+        if not upsert:
+            self.exist_condition(cond)
 
         if increment:
             # バージョンカウンタの操作
             upd.add('_v', 1)
             if not upsert:
-                if cond is None:
-                    cond = ConditionExpression()
-                else:
-                    cond.op_and()
-
                 with cond:
                     cond.equal('_v', self._v)
                     cond.op_or()
@@ -384,11 +384,9 @@ class SoloHatsudenkiTable(object):
                     cond.attribute_not_exists('_v')
 
         keys = self.serialized_key
-
         res = await HatsudenkiClient.update_item(self.get_collection_name(), keys, upd, cond)
 
         self.flush()
-
         if increment:
             self._v += 1
 

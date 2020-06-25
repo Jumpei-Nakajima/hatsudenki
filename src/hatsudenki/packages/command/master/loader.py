@@ -40,4 +40,4 @@ class MasterTableLoader(LoaderBase[MasterTable]):
         return self.ref_table_name.get(table_name, None)
 
     def get_by_excel_name(self, excel_name: str):
-        return self.ref_excel_name[excel_name]
+        return self.ref_excel_name.get(excel_name, None)

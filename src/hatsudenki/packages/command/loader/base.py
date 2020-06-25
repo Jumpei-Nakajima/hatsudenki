@@ -31,7 +31,8 @@ class LoaderBase(Generic[T]):
         d = self.datas.get(p)
         if d is None:
             d = self._load(p)
-            self.datas[p] = d
+            if d is not None:
+                self.datas[p] = d
         return d
 
     def exists(self, path: str):

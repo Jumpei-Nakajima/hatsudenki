@@ -121,7 +121,7 @@ class ToolOutput(object):
 
     @classmethod
     def out(cls, text):
-        if cls.is_setup is False:
+        if cls.is_setup == False:
             return
         cls.print(text, False)
 
@@ -142,7 +142,7 @@ class ToolOutput(object):
         if cls.is_setup is False:
             return
         for idx, t in enumerate(text.split('\n')):
-            if idx is 0:
+            if idx == 0:
                 color_print(cls.get_color(), t, cls.out_indent)
             else:
                 color_print(cls.get_color(), '  ' * cls.out_indent + t)
@@ -153,12 +153,12 @@ class ToolOutput(object):
     @classmethod
     def print_error(cls, text: str, with_indent=True):
         sys.stdout.flush()
-        if cls.is_setup is False:
+        if cls.is_setup == False:
             return
 
         t2 = '【☆ERROR☆】 ' + text
         for idx, t in enumerate(t2.split('\n')):
-            if idx is 0:
+            if idx == 0:
                 color_print(ConsoleColor.RED, t, cls.out_indent)
             else:
                 color_print(ConsoleColor.RED, '  ' * cls.out_indent + t)
@@ -168,7 +168,7 @@ class ToolOutput(object):
 
     @classmethod
     def out_error(cls, text: str):
-        if cls.is_setup is False:
+        if cls.is_setup == False:
             return
         cls.print_error(text, False)
 

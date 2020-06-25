@@ -3,6 +3,7 @@ from typing import List, Dict
 
 from hatsudenki.packages.command.files import yaml_load
 from hatsudenki.packages.command.master.table import MasterTable
+from hatsudenki.packages.command.stdout.output import ConsoleColor
 from hatsudenki.packages.command.util.base_info import BaseInfo
 
 
@@ -10,7 +11,11 @@ class MasterExportYaml(BaseInfo):
     def __init__(self, base_path: Path, full_path: Path, table: MasterTable, loader, *args, **kwargs):
         from hatsudenki.packages.command.master.exporter.pack.loader import MasterExportYamlLoader
         super().__init__(base_path, full_path, *args, **kwargs)
-        self.data: List[Dict[str, any]] = yaml_load(full_path)
+        try:
+            self.data: List[Dict[str, any]] = yaml_load(full_path)
+        except FileNotFoundError as e:
+            print(ConsoleColor.RED + f'††【ERROR!!!】†† - [MstExportYaml] {full_path}が見つかりません' + ConsoleColor.END)
+            self.data: List[Dict[str, any]] = []
         self.table = table
         self.loader: MasterExportYamlLoader = loader
         self._cache = None

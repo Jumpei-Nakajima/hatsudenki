@@ -80,7 +80,8 @@ class MasterExcelBook(ExcelData):
                     cell.style = CellStyle.GREEN.name
                 if c.is_relation:
                     # 参照が設定されている列
-                    cell.value = c.excel_header_name
+                    cell.value = c.excel_raw_header_name
+                    cell.hyperlink = c.get_link_label()
                     cell.font = Font(name="Meiryo UI", size=10, underline="single",
                                      color=Color(rgb=None, indexed=None, auto=None, theme=10, tint=0.0, type="theme"))
                 else:

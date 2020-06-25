@@ -1,6 +1,6 @@
 import unicodedata
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Generator, Tuple
 
 from hatsudenki.packages.command.loader.base import LoaderBase, T
 from hatsudenki.packages.command.master.exporter.excel import MasterExcel
@@ -22,8 +22,15 @@ class MasterExcelLoader(LoaderBase[MasterExcel]):
         self.tag_loader = master_tag_loader
         self.is_debug = False
 
+    def iter(self) -> Generator[Tuple[Path, T], None, None]:
+        for k, v in self.datas.items():
+            yield k, self.get_from_path(k)
+
     def _load(self, path: Path) -> T:
         table = self.master_loader.get_by_excel_name(path.name.replace('.xlsx', ''))
+
+        if table is None:
+            return None
 
         return MasterExcel(self.base_path, path, table, self)
 

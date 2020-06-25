@@ -3,7 +3,7 @@ from typing import Dict
 
 from hatsudenki.packages.command.files import yaml_load
 from hatsudenki.packages.command.master.column import MasterColumn, ColumnFactory
-from hatsudenki.packages.command.stdout.output import snake_to_camel
+from hatsudenki.packages.command.stdout.output import snake_to_camel, IndentString
 from hatsudenki.packages.command.util.base_info import BaseInfo
 
 
@@ -109,3 +109,15 @@ class MasterTable(BaseInfo):
         for k, c in self.columns.items():
             if c.excel_raw_header_name == excel_name:
                 return c
+
+    def log_id_resolver(self):
+        i = IndentString()
+
+        i.add('@property')
+        i.indent('def log_id(self):')
+        base_str = 'return f"%s#{self.hash_value}' % self.table_name
+        if self.range_key:
+            base_str += "#{self.range_value}"
+        base_str += '"'
+        i.add(base_str)
+        return i

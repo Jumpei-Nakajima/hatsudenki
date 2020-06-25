@@ -33,17 +33,27 @@ class EnumExcelBook(ExcelData):
                     val = row[4]
                     if val.startswith('enum_'):
                         target_enum = self.enum_loader.get_by_name(val)
-                        l = f'=HYPERLINK("{target_enum.excel_name}.xlsx#{target_enum.excel_sheet_name}!A1", "【参照】{target_enum.excel_name} [{target_enum.excel_sheet_name}]")'
+                        link_label = f'{target_enum.excel_name}.xlsx#{target_enum.excel_sheet_name}!A1'
+                        link_value = f'【参照】{target_enum.excel_name} [{target_enum.excel_sheet_name}]'
                     else:
                         target_table = self.table_loader.get_by_table_name(val)
-                        l = f'=HYPERLINK("../{target_table.excel_name}.xlsx#{target_table.excel_sheet_name}!A1", "【参照】{target_table.excel_name} [{target_table.excel_sheet_name}]")'
-                    row[4] = l
+                        if target_table is None:
+                            link_label = ''
+                            link_value = '【参照先定義なし】'
+                            print('=================================================')
+                            print(f'参照先なし:{val}')
+                        else:
+                            link_label = f'../{target_table.excel_name}.xlsx#{target_table.excel_sheet_name}!A1'
+                            link_value = f'【参照】{target_table.excel_name} [{target_table.excel_sheet_name}]'
                     self.write_row(sheet_name, idx + 1, 0, row)
                     c = self.book[sheet_name].cell(idx + 2, 5)
+                    c.value = link_value
+                    c.hyperlink = link_label
                     c.font = Font(name="Meiryo UI", size=10, underline="single",
                                   color=Color(rgb=None, indexed=None, auto=None, theme=10, tint=0.0, type="theme"))
 
             else:
-                self.write_row(sheet_name, 0, 0, ['id', 'name', 'ref_name', 'display_name', 'comment'], CellStyle.RED)
+                self.write_row(sheet_name, 0, 0, ['id', 'name', 'ref_name', 'display_name', 'comment'],
+                               CellStyle.RED)
                 for idx, v in enumerate(data.values):
                     self.write_row(sheet_name, idx + 1, 0, v.excel_row)

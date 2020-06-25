@@ -61,6 +61,14 @@ class TableManager(object):
         return True
 
     @classmethod
+    def get_all_collection_names(cls):
+        return cls._all_collections.keys()
+
+    @classmethod
+    def get_all_table_name(cls):
+        return cls._all_tables.keys()
+
+    @classmethod
     def get_by_table_name(cls, table_name: str):
         return cls._all_tables[table_name]
 

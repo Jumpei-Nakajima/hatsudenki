@@ -1,4 +1,3 @@
-from hatsudenki.packages.command.master.column import MasterColumn
 from hatsudenki.packages.command.master.loader import MasterTableLoader
 from hatsudenki.packages.command.master.table import MasterTable
 from hatsudenki.packages.command.renderer.base import RenderUnit, FileRenderer
@@ -29,7 +28,6 @@ class MasterDataStoreRenderUnit(RenderUnit[MasterTable]):
         i.add('fields = self.__class__.Field')
 
         resolver = IndentString()
-        no_serial = True
         for k, c in self.data.columns.items():
             f.add(c.python_define_name)
             i.add(c.python_init_name)
@@ -42,13 +40,7 @@ class MasterDataStoreRenderUnit(RenderUnit[MasterTable]):
                 # select/choseの解決
                 resolver.add(c.resolver_name(self.data.columns[c.selector]))
                 resolver.blank_line()
-            elif c.is_serial_key:
-                # ログ用シリアル
-                resolver.add(c.serial_resolver_name)
-                no_serial = False
-        # シリアルがないテーブルではone_cursorを返却する
-        if no_serial:
-            resolver.add(MasterColumn.serial_resolver_default())
+        resolver.add(self.data.log_id_resolver())
 
         m.blank_line()
         u.add(m)
